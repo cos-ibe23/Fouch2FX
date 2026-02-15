@@ -2,30 +2,35 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
-const app = express();
-
-const pool = require("./db");
 const path = require("path");
-app.use(express.static(path.join(__dirname, "public")));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
 
+const app = express();
+const pool = require("./db");
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-app.get("/", (req, res) => {
-  res.send("DestinyYNF API Running");
-});
-pool.query("SELECT NOW()", (err, res) => {
+/* =============================
+   DB CONNECTION TEST
+============================= */
+pool.query("SELECT NOW()", (err, result) => {
   if (err) {
     console.error("DB connection failed:", err);
   } else {
-    console.log("DB connected at:", res.rows[0]);
+    console.log("DB connected at:", result.rows[0]);
   }
 });
-// SIGNUP
+
+/* =============================
+   ROUTES
+============================= */
+
+app.get("/", (req, res) => {
+  res.send("Marvic_B API Running");
+});
+
+/* ========= SIGNUP ========= */
 app.post("/signup", async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -33,12 +38,11 @@ app.post("/signup", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await pool.query(
-      "INSERT INTO destiny_customers(name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email",
+      "INSERT INTO marvic_b_customers (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email",
       [name, email, hashedPassword]
     );
 
     res.json(newUser.rows[0]);
-
   } catch (err) {
     if (err.code === "23505") {
       return res.status(400).json({ error: "Email already exists" });
@@ -49,14 +53,13 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-
-// LOGIN
+/* ========= LOGIN ========= */
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
     const user = await pool.query(
-      "SELECT * FROM destiny_customers WHERE email = $1",
+      "SELECT * FROM marvic_b_customers WHERE email = $1",
       [email]
     );
 
@@ -66,7 +69,7 @@ app.post("/login", async (req, res) => {
 
     const validPassword = await bcrypt.compare(
       password,
-      user.rows[0].password_hash   // ✅ THIS IS THE FIX
+      user.rows[0].password_hash
     );
 
     if (!validPassword) {
@@ -85,20 +88,13 @@ app.post("/login", async (req, res) => {
   }
 });
 
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-
-
-
-// CREATE ORDER
+/* ========= CREATE ORDER ========= */
 app.post("/orders", async (req, res) => {
   const { customer_id, origin, destination, weight } = req.body;
 
   try {
     const newOrder = await pool.query(
-      "INSERT INTO destiny_orders (customer_id, origin, destination, weight) VALUES ($1,$2,$3,$4) RETURNING *",
+      "INSERT INTO marvic_b_orders (customer_id, origin, destination, weight) VALUES ($1,$2,$3,$4) RETURNING *",
       [customer_id, origin, destination, weight]
     );
 
@@ -109,13 +105,13 @@ app.post("/orders", async (req, res) => {
   }
 });
 
-// GET ORDERS FOR A USER
+/* ========= GET ORDERS ========= */
 app.get("/orders/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
     const orders = await pool.query(
-      "SELECT * FROM orders WHERE customer_id=$1",
+      "SELECT * FROM marvic_b_orders WHERE customer_id = $1",
       [id]
     );
 
@@ -126,23 +122,8 @@ app.get("/orders/:id", async (req, res) => {
   }
 });
 
-
-// LOAD ORDERS
-async function loadOrders() {
-  const res = await fetch(`${BASE_URL}/orders/${user.id}`);
-  const orders = await res.json();
-
-  const container = document.getElementById("ordersList");
-  container.innerHTML = "";
-
-  orders.forEach(order => {
-    const div = document.createElement("div");
-    div.innerHTML = `
-      <p><strong>From:</strong> ${order.origin}</p>
-      <p><strong>To:</strong> ${order.destination}</p>
-      <p><strong>Weight:</strong> ${order.weight} kg</p>
-      <hr>
-    `;
-    container.appendChild(div);
-  });
-}
+/* =============================
+   START SERVER
+============================= */
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
